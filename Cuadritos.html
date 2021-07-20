@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Cuadrito</title>
+    <style></style>
+</head>
+
+<div id="simplex-menu">
+    <span></span>
+</div> 
+<head>
+    <meta charset="UTF-8">
+    <title>Menu</title>
+    <link rel="stylesheet" href="css/estilos.css">
+    
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+</head>
+<body>
+    <div id="menu">
+        <ul>
+            <li><a href=#>Nuevo Juego</a></li>
+            <li><a href="Reglas.html">¿Cómo jugar?</a></li>
+            </ul>
+        </div>
+        <script src="js/script.js"></script>
+        
+    <script>
+        "use strict";
+
+        // Parámetros del juego
+        const DELAY_COMP = 0.5; // Segundos para que la computadora juegue
+        const DELAY_END = 2; // Segundos para arrancar un juego nuevo
+        const FPS = 30; // Frames por segundo
+        const GRID_SIZE = 6; // Número de filas y columnas
+        const ALTURA = 660; // Píxeles
+
+        // Dimensiones
+        const ANCHO = ALTURA * 0.9;
+        const CELL = ANCHO / (GRID_SIZE + 2); // Tamaño de las celdas y los márgenes izquierdo y derecho
+        const TRAZO = CELL / 12; // Ancho del trazo
+        const PUNTO = TRAZO; // Radio del punto
+        const MARGEN = ALTURA - (GRID_SIZE + 1) * CELL; // Margen superior para el texto
+
+        // Colores
+        const COLOR_TABLERO = "lightgreen";
+        const COLOR_BORDE = "black";
+        const COLOR_COMP = "crimson";
+        const COLOR_COMP_LIT = "lightpink";
+        const COLOR_PUNTO = "brown";
+        const COLOR_PLAY = "royalblue";
+        const COLOR_PLAY_LIT = "lightsteelblue";
+        const COLOR_TIE = "black";
+
+        // text
+        const TEXT_COMP = "Computadora";
+        const TEXT_COMP_SML = "C";
+        const TEXT_JUG = "Jugador";
+        const TEXT_JUG_SML = "J";
+        const TEXT_SIZE_CELL = CELL / 3;
+        const TEXT_SIZE_TOP = MARGEN / 6;
+        const TEXT_TIE = "¡Empate!";
+        const TEXT_WIN = "¡Victoria!";
+
+        // Definiciones
+        const Side = {
+            BOT: 0,
+            LEFT: 1,
+            RIGHT: 2,
+            TOP: 3
+        }
+
+        // Prepara el canvas
+        var canv = document.createElement("canvas");
+        canv.height = ALTURA;
+        canv.width = ANCHO;
+        document.body.appendChild(canv);
+        var canvRect = canv.getBoundingClientRect();
+
+        // Prepara el contexto
+        var ctx = canv.getContext("2d");
+        ctx.lineWidth = TRAZO;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+
+        // Variables del juego
+        var currentCells, playersTurn, squares;
+        var scoreComp, scorePlay;
+        var timeComp, timeEnd;
+
+
+        newGame();
+             
+        // Eventos
+        canv.addEventListener("mousemove", highlightGrid);
+        canv.addEventListener("click", click);
+
+        // Prepara el funcionar del juego
+        setInterval(loop, 1000 / FPS);
+
+        function loop() {
+            drawTablero();
+            drawSquares();
+            drawGrid();
+            drawScores();
+            goComputer();
+        }
+
+        function click(/** @type {MouseEvent} */ ev) {
+            if (!playersTurn || timeEnd > 0) {
+                return;
+            }
+            selectSide();
+        }
+
+        function drawTablero() {
+            ctx.fillStyle = COLOR_TABLERO;
+            ctx.strokeStyle = COLOR_BORDE;
+            ctx.fillRect(0, 0, ANCHO, ALTURA);
+            ctx.strokeRect(TRAZO / 2, TRAZO / 2, ANCHO - TRAZO, ALTURA - TRAZO);
+        }
+
+        function drawPunto(x, y) {
+            ctx.fillStyle = COLOR_PUNTO;
+            ctx.beginPath();
+            ctx.arc(x, y, PUNTO, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function drawGrid() {
+            for (let i = 0; i < GRID_SIZE + 1; i++) {
+                for (let j = 0; j < GRID_SIZE + 1; j++) {
+                    drawPunto(getGridX(j), getGridY(i));
+                }
+            }
+        }
+
+        function drawLine(x0, y0, x1, y1, color) {
+            ctx.strokeStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(x1, y1);
+            ctx.stroke();
+        }
+
+        function drawScores() {
+            let colComp = playersTurn ? COLOR_COMP_LIT : COLOR_COMP;
+            let colPlay = playersTurn ? COLOR_PLAY : COLOR_PLAY_LIT;
+            drawText(TEXT_JUG, ANCHO * 0.25, MARGEN * 0.25, colPlay, TEXT_SIZE_TOP);
+            drawText(scorePlay, ANCHO * 0.25, MARGEN * 0.6, colPlay, TEXT_SIZE_TOP * 2);
+            drawText(TEXT_COMP, ANCHO * 0.75, MARGEN * 0.25, colComp, TEXT_SIZE_TOP);
+            drawText(scoreComp, ANCHO * 0.75, MARGEN * 0.6, colComp, TEXT_SIZE_TOP * 2);
+
+            // Texto de fin de juego
+            if (timeEnd > 0) {
+                timeEnd--;
+
+                // Empate
+                if (scoreComp == scorePlay) {
+                    drawText(TEXT_TIE, ANCHO * 0.5, MARGEN * 0.6, COLOR_TIE, TEXT_SIZE_TOP);
+                } else {
+                    let playerWins = scorePlay > scoreComp;
+                    let color = playerWins ? COLOR_PLAY : COLOR_COMP;
+                    let text = playerWins ? TEXT_JUG : TEXT_COMP;
+                    drawText(text, ANCHO * 0.5, MARGEN * 0.5, color, TEXT_SIZE_TOP);
+                    drawText(TEXT_WIN, ANCHO * 0.5, MARGEN * 0.7, color, TEXT_SIZE_TOP);
+                }
+
+                // Juego nuevo
+                if (timeEnd == 0) {
+                    newGame();
+                }
+            }
+        }
+
+        function drawSquares() {
+            for (let row of squares) {
+                for (let square of row) {
+                    square.drawSides();
+                    square.drawFill();
+                }
+            }
+        }
+
+        function drawText(text, x, y, color, size) {
+            ctx.fillStyle = color;
+            ctx.font = size + "px arial";
+            ctx.fillText(text, x, y);
+        }
+
+        function getColor(player, light) {
+            if (player) {
+                return light ? COLOR_PLAY_LIT : COLOR_PLAY;
+            } else {
+                return light ? COLOR_COMP_LIT : COLOR_COMP;
+            }
+        }
+
+        function getText(player, small) {
+            if (player) {
+                return small ? TEXT_JUG_SML : TEXT_JUG;
+            } else {
+                return small ? TEXT_COMP_SML : TEXT_COMP;
+            }
+        }
+
+        function getGridX(col) {
+            return CELL * (col + 1);
+        }
+
+        function getGridY(row) {
+            return MARGEN + CELL * row;
+        }
+
+        function getValidNeighbourSides(row, col) {
+            let sides = [];
+            let square = squares[row][col];
+
+            // Chequea el lado izquierdo
+            if (!square.sideLeft.selected) {
+                if (col == 0 || squares[row][col - 1].numSelected < 2) {
+                    sides.push(Side.LEFT);
+                }
+            }
+
+            // Chequea el lado derecho
+            if (!square.sideRight.selected) {
+                if (col == squares[0].length - 1 || squares[row][col + 1].numSelected < 2) {
+                    sides.push(Side.RIGHT);
+                }
+            }
+
+            // Chequea el lado superior
+            if (!square.sideTop.selected) {
+                if (row == 0 || squares[row - 1][col].numSelected < 2) {
+                    sides.push(Side.TOP);
+                }
+            }
+
+            // Chequea el lado inferior
+            if (!square.sideBot.selected) {
+                if (row == squares.length - 1 || squares[row + 1][col].numSelected < 2) {
+                    sides.push(Side.BOT);
+                }
+            }
+
+            return sides;
+        }
+
+        function goComputer() {
+
+            if (playersTurn || timeEnd > 0) {
+                return;
+            }
+
+            // Cuenta regresiva hasta que la computadora juega
+            if (timeComp > 0) {
+                timeComp--;
+                if (timeComp == 0) {
+                    selectSide();
+                }
+                return;
+            }
+
+            // Arreglo de opciones
+            let options = [];
+            options[0] = [];
+            options[1] = [];
+            options[2] = [];
+
+            // Máxima prioridad - selecciona un cuadro que tenga 3 lados dibujados
+            // Segunda prioridad - selecciona un cuadro que tenga 2 lados dibujados
+            // Mínima prioridad - selecciona un cuadro que tenga 1 lado dibujado
+            for (let i = 0; i < squares.length; i++) {
+                for (let j = 0; j < squares[0].length; j++) {
+                    switch (squares[i][j].numSelected) {
+                        case 3: // first priority
+                            options[0].push({square: squares[i][j], sides: []});
+                            break;
+                        case 0: // second priority
+                        case 1:
+                            let sides = getValidNeighbourSides(i, j);
+                            let priority = sides.length > 0 ? 1 : 2;
+                            options[priority].push({square: squares[i][j], sides: sides});
+                            break;
+                        case 2: // third priority
+                            options[2].push({square: squares[i][j], sides: []});
+                            break;
+                    }
+                }
+            }
+
+            // Escoge un cuadro al azar según su prioridad
+            let option;
+            if (options[0].length > 0) {
+                option = options[0][Math.floor(Math.random() * options[0].length)];
+            } else if (options[1].length > 0) {
+                option = options[1][Math.floor(Math.random() * options[1].length)];
+            } else if (options[2].length > 0) {
+                option = options[2][Math.floor(Math.random() * options[2].length)];
+            }
+
+            // Selecciona un lado válido al azar
+            let side = null;
+            if (option.sides.length > 0) {
+                side = option.sides[Math.floor(Math.random() * option.sides.length)];
+            }
+
+            // Obtiene las coordenadas del cuadro
+            let coords = option.square.getFreeSideCoords(side);
+            highlightSide(coords.x, coords.y);
+
+            // El retraso
+            timeComp = Math.ceil(DELAY_COMP * FPS);
+        }
+
+        function highlightGrid(/** @type {MouseEvent} */ ev) {
+            if (!playersTurn || timeEnd > 0) {
+                return;
+            }
+
+            // Se obtiene la posición del mouse en relación con el canvas
+            let x = ev.clientX - canvRect.left;
+            let y = ev.clientY - canvRect.top;
+
+            // Se destaca el lado del cuadro
+            highlightSide(x, y);
+        }
+
+        function highlightSide(x, y) {
+
+            // Se limpia el señalado previo
+            for (let row of squares) {
+                for (let square of row) {
+                    square.highlight = null;
+                }
+            }
+
+            // Se revisa cada celda
+            let rows = squares.length;
+            let cols = squares[0].length;
+            currentCells = [];
+            OUTER: for (let i = 0; i < rows; i++) {
+                for (let j = 0; j < cols; j++) {
+                    if (squares[i][j].contains(x, y)) {
+
+                        // Destaca el actual
+                        let side = squares[i][j].highlightSide(x, y);
+                        if (side != null) {
+                            currentCells.push({row: i, col: j});
+                        }
+
+                        // Determina los vecinos
+                        let row = i, col = j, highlight, neighbour = true;
+                        if (side == Side.LEFT && j > 0) {
+                            col = j - 1;
+                            highlight = Side.RIGHT;
+                        } else if (side == Side.RIGHT && j < cols - 1) {
+                            col = j + 1;
+                            highlight = Side.LEFT;
+                        } else if (side == Side.TOP && i > 0) {
+                            row = i - 1;
+                            highlight = Side.BOT;
+                        } else if (side == Side.BOT && i < rows - 1) {
+                            row = i + 1;
+                            highlight = Side.TOP;
+                        } else {
+                            neighbour = false;
+                        }
+
+                        // Destaca el vecino
+                        if (neighbour) {
+                            squares[row][col].highlight = highlight;
+                            currentCells.push({row: row, col: col});
+                        }
+
+                        // No necesita continuar
+                        break OUTER;
+                    }
+                }
+            }
+        }
+
+        function newGame() {
+            currentCells = [];
+            playersTurn = Math.random() >= 0.5;
+            scoreComp = 0;
+            scorePlay = 0;
+            timeEnd = 0;
+
+            // Prepara los cuadros
+            squares = [];
+            for (let i = 0; i < GRID_SIZE; i++) {
+                squares[i] = [];
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    squares[i][j] = new Square(getGridX(j), getGridY(i), CELL, CELL);
+                }
+            }
+        }
+
+        function selectSide() {
+            if (currentCells == null || currentCells.length == 0) {
+                return;
+            }
+
+            // Selecciona el lado
+            let filledSquare = false;
+            for (let cell of currentCells) {
+                if (squares[cell.row][cell.col].selectSide()) {
+                    filledSquare = true;
+                }
+            }
+            currentCells = [];
+
+            // Revisa si hay un ganador
+            if (filledSquare) {
+                if (scorePlay + scoreComp == GRID_SIZE * GRID_SIZE) {
+                    // Fin del juego
+                    timeEnd = Math.ceil(DELAY_END * FPS);
+                }
+            } else {
+                // Turno del otro jugador
+                playersTurn = !playersTurn;
+            }
+        }
+
+        // Constructor del objeto Square (cuadro)
+        function Square(x, y, w, h) {
+            this.w = w;
+            this.h = h;
+            this.bot = y + h;
+            this.left = x;
+            this.right = x + w;
+            this.top = y;
+            this.highlight = null;
+            this.numSelected = 0;
+            this.owner = null;
+            this.sideBot = {owner: null, selected: false};
+            this.sideLeft = {owner: null, selected: false};
+            this.sideRight = {owner: null, selected: false};
+            this.sideTop = {owner: null, selected: false};
+
+            this.contains = function(x, y) {
+                return x >= this.left && x < this.right && y >= this.top && y < this.bot;
+            }
+
+            this.drawFill = function() {
+                if (this.owner == null) {
+                    return;
+                }
+
+                // light background
+                ctx.fillStyle = getColor(this.owner, true);
+                ctx.fillRect(
+                    this.left + TRAZO, this.top + TRAZO,
+                    this.w - TRAZO * 2, this.h - TRAZO * 2
+                );
+
+                // Texto en casilla
+                drawText(
+                    getText(this.owner, true),
+                    this.left + this.w / 2,
+                    this.top + this.h / 2,
+                    getColor(this.owner, false),
+                    TEXT_SIZE_CELL
+                );
+            }
+
+            this.drawSide = function(side, color) {
+                switch(side) {
+                    case Side.BOT:
+                        drawLine(this.left, this.bot, this.right, this.bot, color);
+                        break;
+                    case Side.LEFT:
+                        drawLine(this.left, this.top, this.left, this.bot, color);
+                        break;
+                    case Side.RIGHT:
+                        drawLine(this.right, this.top, this.right, this.bot, color);
+                        break;
+                    case Side.TOP:
+                        drawLine(this.left, this.top, this.right, this.top, color);
+                        break;
+                }
+            }
+
+            this.drawSides = function() {
+
+                // Destaca
+                if (this.highlight != null) {
+                    this.drawSide(this.highlight, getColor(playersTurn, true));
+                }
+
+                // Lados seleccionados
+                if (this.sideBot.selected) {
+                    this.drawSide(Side.BOT, getColor(this.sideBot.owner, false));
+                }
+                if (this.sideLeft.selected) {
+                    this.drawSide(Side.LEFT, getColor(this.sideLeft.owner, false));
+                }
+                if (this.sideRight.selected) {
+                    this.drawSide(Side.RIGHT, getColor(this.sideRight.owner, false));
+                }
+                if (this.sideTop.selected) {
+                    this.drawSide(Side.TOP, getColor(this.sideTop.owner, false));
+                }
+            }
+            
+            // Retorna las coordenadas de un lado libre aleatorio
+            this.getFreeSideCoords = function(side) {
+                
+                // valid coordinates of each side
+                let coordsBot = {x: this.left + this.w / 2, y: this.bot - 1};
+                let coordsLeft = {x: this.left, y: this.top + this.h / 2};
+                let coordsRight = {x: this.right - 1, y: this.top + this.h / 2};
+                let coordsTop = {x: this.left + this.w / 2, y: this.top};
+
+                // Obtiene las coordenadas del lado
+                let coords = null;
+                switch (side) {
+                    case Side.BOT:
+                        coords = coordsBot;
+                        break;
+                    case Side.LEFT:
+                        coords = coordsLeft;
+                        break;
+                    case Side.RIGHT:
+                        coords = coordsRight;
+                        break;
+                    case Side.TOP:
+                        coords = coordsTop;
+                        break;
+                }
+
+                // Retorna la coordenadas del lado pedido
+                if (coords != null) {
+                    return coords;
+                }
+
+                // De lo contrario, elige un lado libre de forma aleatoria
+                let freeCoords = [];
+                if (!this.sideBot.selected) {
+                    freeCoords.push(coordsBot);
+                }
+                if (!this.sideLeft.selected) {
+                    freeCoords.push(coordsLeft);
+                }
+                if (!this.sideRight.selected) {
+                    freeCoords.push(coordsRight);
+                }
+                if (!this.sideTop.selected) {
+                    freeCoords.push(coordsTop);
+                }
+                return freeCoords[Math.floor(Math.random() * freeCoords.length)];
+            }
+
+            this.highlightSide = function(x, y) {
+
+                // Calcula las distancias hacia cada lado
+                let dBot = this.bot - y;
+                let dLeft = x - this.left;
+                let dRight = this.right - x;
+                let dTop = y - this.top;
+
+                // Determina el valor más cercano
+                let dClosest = Math.min(dBot, dLeft, dRight, dTop);
+
+                // Destaca el más cercano si no está seleccionado ya
+                if (dClosest == dBot && !this.sideBot.selected) {
+                    this.highlight = Side.BOT;
+                } else if (dClosest == dLeft && !this.sideLeft.selected) {
+                    this.highlight = Side.LEFT;
+                } else if (dClosest == dRight && !this.sideRight.selected) {
+                    this.highlight = Side.RIGHT;
+                } else if (dClosest == dTop && !this.sideTop.selected) {
+                    this.highlight = Side.TOP;
+                }
+
+                // Retorna el lado destacado
+                return this.highlight;
+            }
+
+            this.selectSide = function() {
+                if (this.highlight == null) {
+                    return;
+                }
+
+                // Selecciona el lado destacado
+                switch (this.highlight) {
+                    case Side.BOT:
+                        this.sideBot.owner = playersTurn;
+                        this.sideBot.selected = true;
+                        break;
+                    case Side.LEFT:
+                        this.sideLeft.owner = playersTurn;
+                        this.sideLeft.selected = true;
+                        break;
+                    case Side.RIGHT:
+                        this.sideRight.owner = playersTurn;
+                        this.sideRight.selected = true;
+                        break;
+                    case Side.TOP:
+                        this.sideTop.owner = playersTurn;
+                        this.sideTop.selected = true;
+                        break;
+                }
+                this.highlight = null;
+
+                // Incrementa el número de seleccionados
+                this.numSelected++;
+                if (this.numSelected == 4) {
+                    this.owner = playersTurn;
+
+                    // Incrementa la puntuación
+                    if (playersTurn) {
+                        scorePlay++;
+                    } else {
+                        scoreComp++;
+                    }
+
+                    // Lleno
+                    return true;
+                }
+
+                // No lleno
+                return false;
+            }
+        }
+    </script>
+    
+</body>
+
+</html>
